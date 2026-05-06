@@ -10,16 +10,19 @@ local target2 = nil
 local evidenceTargets = {}
 local currentTombs = {}
 local isInteracting = {}
+local robbedBodies = {} -- Tracks NPCs that have already been searched
+
+local isSearching = false -- Global interaction lock: prevents spamming any target while an action is in progress
 
 local coordsList = {}
 local startIndex = 1
 
 RegisterCommand('addcoord', function()
-    TriggerServerEvent('yoda-cemeteryrob:requestLastIndex')
+    TriggerServerEvent('sf_cemetery:requestLastIndex')
 end, false)
 
-RegisterNetEvent('yoda-cemeteryrob:setLastIndex')
-AddEventHandler('yoda-cemeteryrob:setLastIndex', function(lastIndex)
+RegisterNetEvent('sf_cemetery:setLastIndex')
+AddEventHandler('sf_cemetery:setLastIndex', function(lastIndex)
     startIndex = lastIndex + 1
     local playerPed = PlayerPedId()
     local coords = GetEntityCoords(playerPed)
@@ -28,7 +31,7 @@ AddEventHandler('yoda-cemeteryrob:setLastIndex', function(lastIndex)
 end)
 
 RegisterCommand('closecoord', function()
-    TriggerServerEvent('yoda-cemeteryrob:saveCoords', coordsList)
+    TriggerServerEvent('sf_cemetery:saveCoords', coordsList)
 end, false)
 
 local ESX, QB
@@ -45,7 +48,7 @@ end
 local evidenceAnalysisCoords = Config.CheckEvidenceCoords
 
 function ApplyEvidenceTargetsToPolice()
-    TriggerServerEvent('yoda-cemeteryrob:sendPoliceTargets')
+    TriggerServerEvent('sf_cemetery:sendPoliceTargets')
 end
 
 local function getPlayerData()
@@ -55,7 +58,6 @@ local function getPlayerData()
             firstname = ESX.PlayerData.firstName
             secondname = ESX.PlayerData.lastName
         else
-            --print("PlayerData not loaded.")
             return
         end
     else
@@ -70,16 +72,14 @@ end
 if FRAMEWORK == 'QB' then
     RegisterNetEvent('QBCore:Client:OnPlayerLoaded', function()
         getPlayerData()
-    end) 
-    --getPlayerData()
+    end)
 elseif FRAMEWORK == 'ESX' then
     RegisterNetEvent('esx:playerLoaded', function()
         getPlayerData()
     end)
-    --getPlayerData()
 end
 
-RegisterNetEvent('yoda-cemeteryrob:createPoliceTarget', function()
+RegisterNetEvent('sf_cemetery:createPoliceTarget', function()
     if evidenceTargets['analyzeEvidence'] then
         if TARGET == 'OX' then
             if evidenceTargets['analyzeEvidence'] then
@@ -97,11 +97,11 @@ RegisterNetEvent('yoda-cemeteryrob:createPoliceTarget', function()
             coords = vector3(evidenceAnalysisCoords.x, evidenceAnalysisCoords.y, evidenceAnalysisCoords.z),
             radius = 2.0,
             options = {
-                name = 'yoda-cemeteryrob:analyzeEvidence',
+                name = 'sf_cemetery:analyzeEvidence',
                 icon = 'fas fa-microscope',
                 label = _t('target.analyze_evidence'),
                 onSelect = function ()
-                    TriggerServerEvent('yoda-cemeteryrob:analyzeEvidence')
+                    TriggerServerEvent('sf_cemetery:analyzeEvidence')
                 end
             }
         })
@@ -113,7 +113,7 @@ RegisterNetEvent('yoda-cemeteryrob:createPoliceTarget', function()
             options = {
                 {
                     action = function ()
-                        TriggerServerEvent('yoda-cemeteryrob:analyzeEvidence')
+                        TriggerServerEvent('sf_cemetery:analyzeEvidence')
                     end,
                     icon = "fas fa-microscope",
                     label = _t('target.analyze_evidence'),
@@ -125,46 +125,41 @@ RegisterNetEvent('yoda-cemeteryrob:createPoliceTarget', function()
 end)
 
 Citizen.CreateThread(function ()
-    TriggerServerEvent('yoda-cemeteryrob:randomLocInfos')
+    TriggerServerEvent('sf_cemetery:randomLocInfos')
     ApplyEvidenceTargetsToPolice()
 end)
 
-RegisterNetEvent('yoda-cemeteryrob:locInfosGenerated')
-AddEventHandler('yoda-cemeteryrob:locInfosGenerated', function(graves)
+RegisterNetEvent('sf_cemetery:locInfosGenerated')
+AddEventHandler('sf_cemetery:locInfosGenerated', function(graves)
     gravesBackup = graves
     locInfos = true
     if Config.typeOfRobbery == 'target' then
-        TriggerServerEvent('yoda-cemeteryrob:checkPoliceTarget', graves)
+        TriggerServerEvent('sf_cemetery:checkPoliceTarget', graves)
     end
 end)
 
-RegisterNetEvent('yoda-cemeteryrob:startRob', function (count, graves)
-    --print('rob event')
+RegisterNetEvent('sf_cemetery:startRob', function (count, graves)
     local ped = PlayerPedId()
     local pos = GetEntityCoords(ped, false)
     local n = 0
     count = tonumber(count) or 0
-    --print('Count recebido (numérico):', count)
 
     if count >= Config.minPolice then
         if inRob then
-            TriggerEvent('yoda-cemeteryrob:robStarted')
+            TriggerEvent('sf_cemetery:robStarted')
         else
             for _, grave in pairs(gravesBackup) do
                 n = n + 1
                 local loc = grave.loc
-                --print("Grave loc:", loc)
 
                 if Config.typeOfRobbery == 'item' then
                     local dist = #(loc.xy - pos.xy)
                     if dist < 1 then
-                        --print("Distância até o túmulo:", dist)
                         if not locInfos then
-                            TriggerServerEvent('yoda-cemeteryrob:randomLocInfos')
+                            TriggerServerEvent('sf_cemetery:randomLocInfos')
                         else
                             inRob = true
-                            -- Passando 'n' como index
-                            TriggerServerEvent('yoda-cemeteryrob:searchLocInfo', n, loc) 
+                            TriggerServerEvent('sf_cemetery:searchLocInfo', n, loc)
                             break
                         end
                     end
@@ -172,7 +167,7 @@ RegisterNetEvent('yoda-cemeteryrob:startRob', function (count, graves)
             end
         end
     else
-        TriggerEvent('yoda-cemeteryrob:notEnoughPolice')
+        TriggerEvent('sf_cemetery:notEnoughPolice')
     end
 
     if Config.typeOfRobbery == 'target' then
@@ -184,17 +179,23 @@ RegisterNetEvent('yoda-cemeteryrob:startRob', function (count, graves)
                     coords = vector3(loc.x, loc.y, loc.z - 1),
                     radius = 1.5,
                     options = {
-                        name = 'yoda-cemeteryrob:targetToRob',
+                        name = 'sf_cemetery:targetToRob',
                         icon = 'fas fa-user',
                         label = 'Rob Tomb',
                         onSelect = function ()
                             if count >= Config.minPolice then
-                                if not isInteracting[n] then
+                                if not isInteracting[n] and not isSearching then
+                                    isSearching = true
                                     inRob = true
-                                    TriggerServerEvent('yoda-cemeteryrob:searchLocInfo', n, loc) -- Passando 'n' como index
+                                    -- Remove the zone immediately on click so it disappears right away
+                                    if currentTombs[n] and currentTombs[n].target then
+                                        exports.ox_target:removeZone(currentTombs[n].target)
+                                        currentTombs[n].target = nil
+                                    end
+                                    TriggerServerEvent('sf_cemetery:searchLocInfo', n, loc)
                                 end
                             else
-                                TriggerEvent('yoda-cemeteryrob:notEnoughPolice')
+                                TriggerEvent('sf_cemetery:notEnoughPolice')
                             end
                         end
                     }
@@ -211,12 +212,18 @@ RegisterNetEvent('yoda-cemeteryrob:startRob', function (count, graves)
                         {
                             action = function ()
                                 if count >= Config.minPolice then
-                                    if not isInteracting[n] then
+                                    if not isInteracting[n] and not isSearching then
+                                        isSearching = true
                                         inRob = true
-                                        TriggerServerEvent('yoda-cemeteryrob:searchLocInfo', n, loc) -- Passando 'n' como index
+                                        -- Remove the zone immediately on click so it disappears right away
+                                        if currentTombs[n] and currentTombs[n].targetName then
+                                            exports['qb-target']:RemoveZone(currentTombs[n].targetName)
+                                            currentTombs[n].targetName = nil
+                                        end
+                                        TriggerServerEvent('sf_cemetery:searchLocInfo', n, loc)
                                     end
                                 else
-                                    TriggerEvent('yoda-cemeteryrob:notEnoughPolice')
+                                    TriggerEvent('sf_cemetery:notEnoughPolice')
                                 end
                             end,
                             icon = "fas fa-user",
@@ -232,7 +239,7 @@ RegisterNetEvent('yoda-cemeteryrob:startRob', function (count, graves)
     end
 end)
 
-RegisterNetEvent('yoda-cemeteryrob:startDigging', function (index, loc, bodyinfo, grave)
+RegisterNetEvent('sf_cemetery:startDigging', function (index, loc, bodyinfo, grave)
     isInteracting[index] = true
     local ped = PlayerPedId()
     RequestAnimDict('amb@world_human_gardener_plant@male@base')
@@ -247,7 +254,6 @@ RegisterNetEvent('yoda-cemeteryrob:startDigging', function (index, loc, bodyinfo
     end
 
     if not HasModelLoaded(shovelModel) then
-        --print("Modelo da pá não carregado.")
         return
     end
 
@@ -256,8 +262,8 @@ RegisterNetEvent('yoda-cemeteryrob:startDigging', function (index, loc, bodyinfo
             local tomb = currentTombs[index]
 
             if TARGET == 'OX' then
-                if tomb.targetId then
-                    exports.ox_target:removeZone(tomb.targetId)
+                if tomb.target then
+                    exports.ox_target:removeZone(tomb.target)
                 end
             else
                 if tomb.targetName then
@@ -291,18 +297,19 @@ RegisterNetEvent('yoda-cemeteryrob:startDigging', function (index, loc, bodyinfo
     DeleteObject(shovel)
     SetModelAsNoLongerNeeded(shovelModel)
 
-    if not activeRobs[loc] and bodyinfo then 
+    if not activeRobs[loc] and bodyinfo then
         activeRobs[loc] = true
-        TriggerEvent('yoda-cemeteryrob:spawnPed', loc, grave)
+        TriggerEvent('sf_cemetery:spawnPed', loc, grave)
     elseif not activeRobs[loc] and not bodyinfo then
-        TriggerEvent('yoda-cemeteryrob:noBodysFound')
+        TriggerEvent('sf_cemetery:noBodysFound')
         inRob = false
+        isSearching = false
     end
 
-    TriggerEvent('yoda-cemeteryrob:notifyPolice', loc)
+    TriggerEvent('sf_cemetery:notifyPolice', loc)
 end)
 
-RegisterNetEvent('yoda-cemeteryrob:spawnPed', function(loc, grave)
+RegisterNetEvent('sf_cemetery:spawnPed', function(loc, grave)
     local model = GetHashKey('a_m_m_beach_02')
 
     RequestModel(model)
@@ -338,21 +345,32 @@ RegisterNetEvent('yoda-cemeteryrob:spawnPed', function(loc, grave)
 
         FreezeEntityPosition(ped, true)
         SetEntityCollision(ped, false, false)
-        TriggerEvent('yoda-cemeteryrob:createTarget', ped, loc, grave)
+        TriggerEvent('sf_cemetery:createTarget', ped, loc, grave)
     end
 end)
 
-RegisterNetEvent('yoda-cemeteryrob:createTarget', function (ped, loc, grave)
+RegisterNetEvent('sf_cemetery:createTarget', function (ped, loc, grave)
+    -- Guard: if this NPC has already been robbed, do not create a new interact target
+    if robbedBodies[ped] then
+        return
+    end
+
     if TARGET == 'OX' then
         target1 = exports.ox_target:addSphereZone({
             coords = vector3(loc.x, loc.y, loc.z - 1),
             radius = 2.0,
             options = {
-                name = 'yoda-cemeteryrob:targetToRob',
+                name = 'sf_cemetery:targetToRob',
                 icon = 'fas fa-user',
                 label = _t('target.rob'),
                 onSelect = function ()
-                    TriggerEvent('yoda-cemeteryrob:playSearchAnim', source, ped, loc, grave)
+                    if robbedBodies[ped] or isSearching then return end
+                    isSearching = true
+                    robbedBodies[ped] = true
+                    -- Remove the zone immediately so it cannot be triggered again
+                    exports.ox_target:removeZone(target1)
+                    target1 = nil
+                    TriggerEvent('sf_cemetery:playSearchAnim', source, ped, loc, grave)
                 end
             }
         })
@@ -364,7 +382,13 @@ RegisterNetEvent('yoda-cemeteryrob:createTarget', function (ped, loc, grave)
             options = {
                 {
                     action = function ()
-                        TriggerEvent('yoda-cemeteryrob:playSearchAnim', source, ped, loc, grave)
+                        if robbedBodies[ped] or isSearching then return end
+                        isSearching = true
+                        robbedBodies[ped] = true
+                        -- Remove the zone immediately so it cannot be triggered again
+                        exports['qb-target']:RemoveZone('targetrob')
+                        target1 = nil
+                        TriggerEvent('sf_cemetery:playSearchAnim', source, ped, loc, grave)
                     end,
                     icon = "fas fa-user",
                     label = _t('target.rob'),
@@ -375,18 +399,23 @@ RegisterNetEvent('yoda-cemeteryrob:createTarget', function (ped, loc, grave)
     end
 end)
 
-RegisterNetEvent('yoda-cemeteryrob:deleteTarget', function (ped, loc, grave)
-    if TARGET == 'OX' then
-        exports.ox_target:removeZone(target1)
-    else
-        exports['qb-target']:RemoveZone("targetrob")
+RegisterNetEvent('sf_cemetery:deleteTarget', function (ped, loc, grave)
+    -- Zone was already removed the moment the player clicked, but clean up just in case
+    if target1 then
+        if TARGET == 'OX' then
+            exports.ox_target:removeZone(target1)
+        else
+            exports['qb-target']:RemoveZone("targetrob")
+        end
+        target1 = nil
     end
-    TriggerServerEvent('yoda-cemeteryrob:createTargetEvidenceServer', ped, loc, assailantName, grave)
     activeRobs[loc] = nil
     inRob = false
+    isSearching = false -- Unlock so the player can interact with the next tomb
+    TriggerServerEvent('sf_cemetery:createTargetEvidenceServer', ped, loc, assailantName, grave)
 end)
 
-RegisterNetEvent('yoda-cemeteryrob:notifyPolice', function(loc)
+RegisterNetEvent('sf_cemetery:notifyPolice', function(loc)
     local percentage = Config.PoliceNotify * 0.01
     local chance = math.random()
     if chance <= percentage then
@@ -414,7 +443,7 @@ RegisterNetEvent('yoda-cemeteryrob:notifyPolice', function(loc)
     end
 end)
 
-RegisterNetEvent('yoda-cemeteryrob:createTargetEvidenceClient', function(ped, loc, assailantName)
+RegisterNetEvent('sf_cemetery:createTargetEvidenceClient', function(ped, loc, assailantName)
     if target2 then
         if TARGET == 'OX' then
             exports.ox_target:removeZone(target2)
@@ -428,11 +457,11 @@ RegisterNetEvent('yoda-cemeteryrob:createTargetEvidenceClient', function(ped, lo
             coords = vector3(loc.x, loc.y, loc.z - 1),
             radius = 2.0,
             options = {
-                name = 'yoda-cemeteryrob:createEvidence',
+                name = 'sf_cemetery:createEvidence',
                 icon = 'fas fa-user',
                 label = _t('target.evidence'),
                 onSelect = function ()
-                    TriggerServerEvent('yoda-cemeteryrob:receiveEvidence', assailantName)
+                    TriggerServerEvent('sf_cemetery:receiveEvidence', assailantName)
                 end
             }
         })
@@ -444,7 +473,7 @@ RegisterNetEvent('yoda-cemeteryrob:createTargetEvidenceClient', function(ped, lo
             options = {
                 {
                     action = function ()
-                        TriggerServerEvent('yoda-cemeteryrob:receiveEvidence', assailantName)
+                        TriggerServerEvent('sf_cemetery:receiveEvidence', assailantName)
                     end,
                     icon = "fas fa-user",
                     label = _t('target.evidence'),
@@ -457,8 +486,8 @@ RegisterNetEvent('yoda-cemeteryrob:createTargetEvidenceClient', function(ped, lo
 end)
 
 
-RegisterNetEvent('yoda-cemeteryrob:playSearchAnim')
-AddEventHandler('yoda-cemeteryrob:playSearchAnim', function(ped, loc, grave)
+RegisterNetEvent('sf_cemetery:playSearchAnim')
+AddEventHandler('sf_cemetery:playSearchAnim', function(ped, loc, grave)
     local playerPed = PlayerPedId()
 
     RequestAnimDict('amb@medic@standing@kneel@base')
@@ -471,11 +500,12 @@ AddEventHandler('yoda-cemeteryrob:playSearchAnim', function(ped, loc, grave)
 
     ClearPedTasks(playerPed)
 
-    TriggerServerEvent('yoda-cemeteryrob:robResult', ped, loc, grave)
-
+    -- isSearching stays true until deleteTarget fires; server response resets it.
+    -- If the server never responds for any reason, reset here as a safety net.
+    TriggerServerEvent('sf_cemetery:robResult', ped, loc, grave)
 end)
 
-RegisterNetEvent('yoda-cemeteryrob:removeTargetAndPed', function(source, assailantName)
+RegisterNetEvent('sf_cemetery:removeTargetAndPed', function(source, assailantName)
     if target1 then
         if TARGET == 'OX' then
             exports.ox_target:removeZone(target1)
@@ -494,9 +524,13 @@ RegisterNetEvent('yoda-cemeteryrob:removeTargetAndPed', function(source, assaila
         target2 = nil
     end
 
-    DeleteEntity(ped)
+    -- Clean up the robbed body tracking entry and delete the NPC
+    if ped then
+        robbedBodies[ped] = nil
+        DeleteEntity(ped)
+    end
 end)
 
-RegisterNetEvent('yoda-cemeteryrob:checkPolice', function()
-    TriggerServerEvent('yoda-cemeteryrob:checkPoliceServer')
+RegisterNetEvent('sf_cemetery:checkPolice', function()
+    TriggerServerEvent('sf_cemetery:checkPoliceServer')
 end)

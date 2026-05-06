@@ -29,15 +29,15 @@ local function getLastIndexFromFile()
     return lastIndex
 end
 
-RegisterNetEvent('yoda-cemeteryrob:requestLastIndex')
-AddEventHandler('yoda-cemeteryrob:requestLastIndex', function()
+RegisterNetEvent('sf_cemetery:requestLastIndex')
+AddEventHandler('sf_cemetery:requestLastIndex', function()
     local source = source
     local lastIndex = getLastIndexFromFile()
-    TriggerClientEvent('yoda-cemeteryrob:setLastIndex', source, lastIndex)
+    TriggerClientEvent('sf_cemetery:setLastIndex', source, lastIndex)
 end)
 
-RegisterNetEvent('yoda-cemeteryrob:saveCoords')
-AddEventHandler('yoda-cemeteryrob:saveCoords', function(coordsList)
+RegisterNetEvent('sf_cemetery:saveCoords')
+AddEventHandler('sf_cemetery:saveCoords', function(coordsList)
     local configFile = LoadResourceFile(GetCurrentResourceName(), "config2.lua")
 
     if not configFile then
@@ -55,8 +55,8 @@ AddEventHandler('yoda-cemeteryrob:saveCoords', function(coordsList)
     SaveResourceFile(GetCurrentResourceName(), "config2.lua", configFile, -1)
 end)
 
-RegisterNetEvent('yoda-cemeteryrob:randomLocInfos')
-AddEventHandler('yoda-cemeteryrob:randomLocInfos', function()
+RegisterNetEvent('sf_cemetery:randomLocInfos')
+AddEventHandler('sf_cemetery:randomLocInfos', function()
     Graves = {}
     local percentage = Config.Camp * 0.01
     local n = 0
@@ -68,7 +68,7 @@ AddEventHandler('yoda-cemeteryrob:randomLocInfos', function()
         else
             body = false
         end
-        n = n + 1 
+        n = n + 1
         local grave = 'Grave' .. n
         Graves[grave] = {
             loc = location,
@@ -76,34 +76,31 @@ AddEventHandler('yoda-cemeteryrob:randomLocInfos', function()
             open = false,
         }
     end
-    TriggerClientEvent('yoda-cemeteryrob:locInfosGenerated', source, Graves)
+    TriggerClientEvent('sf_cemetery:locInfosGenerated', source, Graves)
 end)
 
-RegisterNetEvent('yoda-cemeteryrob:searchLocInfo')
-AddEventHandler('yoda-cemeteryrob:searchLocInfo', function(index, loc)
+RegisterNetEvent('sf_cemetery:searchLocInfo')
+AddEventHandler('sf_cemetery:searchLocInfo', function(index, loc)
     if loc == nil then
-        print("Erro: loc é nil na função searchLocInfo.")
+        print("[sf_cemetery] Error: loc is nil in searchLocInfo")
         return
     end
 
-    print("Procurando informações para o túmulo com index:", index)  -- Log para depuração
     for _, grave in pairs(Graves) do
-        print("Verificando túmulo:", grave.loc, "Estado:", grave.open) -- Log para depuração
         if grave.loc == loc then
             if grave.open == false then
                 grave.open = true
-                TriggerClientEvent('yoda-cemeteryrob:startDigging', source, index, loc, grave.body, grave)
+                TriggerClientEvent('sf_cemetery:startDigging', source, index, loc, grave.body, grave)
             else
-                TriggerClientEvent('yoda-cemeteryrob:graveOpen', source)
+                TriggerClientEvent('sf_cemetery:graveOpen', source)
                 return
-            end            
+            end
         end
     end
 end)
 
-
-RegisterNetEvent('yoda-cemeteryrob:robResult')
-AddEventHandler('yoda-cemeteryrob:robResult', function (ped, loc, grave)
+RegisterNetEvent('sf_cemetery:robResult')
+AddEventHandler('sf_cemetery:robResult', function (ped, loc, grave)
     local source = source
     local playerName
 
@@ -115,7 +112,7 @@ AddEventHandler('yoda-cemeteryrob:robResult', function (ped, loc, grave)
         playerName = Player.PlayerData.name
     end
 
-    GraveRobbers[loc] = playerName 
+    GraveRobbers[loc] = playerName
 
     local percentage = Config.Values * 0.01
     local chance = math.random()
@@ -133,16 +130,15 @@ AddEventHandler('yoda-cemeteryrob:robResult', function (ped, loc, grave)
         else
             exports['qb-inventory']:AddItem(source, randomItem.item, quantity)
         end
-        
     else
-        TriggerClientEvent('yoda-cemeteryrob:bodyHasNoValues', source)
+        TriggerClientEvent('sf_cemetery:bodyHasNoValues', source)
     end
 
-    TriggerClientEvent('yoda-cemeteryrob:deleteTarget', source, ped, loc, grave)
+    TriggerClientEvent('sf_cemetery:deleteTarget', source, ped, loc, grave)
 end)
 
-RegisterNetEvent('yoda-cemeteryrob:receiveEvidence')
-AddEventHandler('yoda-cemeteryrob:receiveEvidence', function(assailantName)
+RegisterNetEvent('sf_cemetery:receiveEvidence')
+AddEventHandler('sf_cemetery:receiveEvidence', function(assailantName)
     local source = source
 
     if Config.Inventory == 'OX' then
@@ -155,19 +151,18 @@ AddEventHandler('yoda-cemeteryrob:receiveEvidence', function(assailantName)
 
     for _, player in pairs(players) do
         local playerData = (FRAMEWORK == 'QB') and player.PlayerData or ESX.GetPlayerData(player)
-        
+
         if playerData and playerData.job.name == Config.PoliceJob then
-            TriggerClientEvent('yoda-cemeteryrob:removeTargetAndPed', -1, source, assailantName)
+            TriggerClientEvent('sf_cemetery:removeTargetAndPed', -1, source, assailantName)
         end
     end
-    
-    TriggerClientEvent('yoda-cemeteryrob:bloodEvidenceCollected', source, assailantName)
+
+    TriggerClientEvent('sf_cemetery:bloodEvidenceCollected', source, assailantName)
 end)
 
-RegisterNetEvent('yoda-cemeteryrob:analyzeEvidence')
-AddEventHandler('yoda-cemeteryrob:analyzeEvidence', function()
+RegisterNetEvent('sf_cemetery:analyzeEvidence')
+AddEventHandler('sf_cemetery:analyzeEvidence', function()
     local source = source
-    local playerName = GetPlayerName(source)
     local hasEvidence = false
     local assailantName = nil
 
@@ -186,9 +181,9 @@ AddEventHandler('yoda-cemeteryrob:analyzeEvidence', function()
 
         if job.name == Config.PoliceJob then
             if hasEvidence then
-                TriggerClientEvent('yoda-cemeteryrob:evidenceAnalyzed', source, assailantName)
+                TriggerClientEvent('sf_cemetery:evidenceAnalyzed', source, assailantName)
             else
-                TriggerClientEvent('yoda-cemeteryrob:noEvidence', source)
+                TriggerClientEvent('sf_cemetery:noEvidence', source)
             end
         end
 
@@ -204,16 +199,16 @@ AddEventHandler('yoda-cemeteryrob:analyzeEvidence', function()
 
         if job.name == Config.PoliceJob then
             if hasEvidence then
-                TriggerClientEvent('yoda-cemeteryrob:evidenceAnalyzed', source, assailantName)
+                TriggerClientEvent('sf_cemetery:evidenceAnalyzed', source, assailantName)
             else
-                TriggerClientEvent('yoda-cemeteryrob:noEvidence', source)
+                TriggerClientEvent('sf_cemetery:noEvidence', source)
             end
         end
     end
 end)
 
-RegisterNetEvent('yoda-cemeteryrob:sendPoliceTargets')
-AddEventHandler('yoda-cemeteryrob:sendPoliceTargets', function()
+RegisterNetEvent('sf_cemetery:sendPoliceTargets')
+AddEventHandler('sf_cemetery:sendPoliceTargets', function()
     local players = (FRAMEWORK == 'QB') and QBCore.Functions.GetQBPlayers() or ESX.GetPlayers()
 
     for _, player in pairs(players) do
@@ -228,13 +223,13 @@ AddEventHandler('yoda-cemeteryrob:sendPoliceTargets', function()
 
         if playerData and playerData.name == Config.PoliceJob then
             local playerSource = (FRAMEWORK == 'QB') and player.PlayerData.source or player
-            TriggerClientEvent('yoda-cemeteryrob:createPoliceTarget', playerSource, evidenceAnalysisCoords)
+            TriggerClientEvent('sf_cemetery:createPoliceTarget', playerSource, evidenceAnalysisCoords)
         end
     end
 end)
 
-RegisterNetEvent('yoda-cemeteryrob:createTargetEvidenceServer')
-AddEventHandler('yoda-cemeteryrob:createTargetEvidenceServer', function(ped, loc, assailantName, grave)
+RegisterNetEvent('sf_cemetery:createTargetEvidenceServer')
+AddEventHandler('sf_cemetery:createTargetEvidenceServer', function(ped, loc, assailantName, grave)
     local loc = grave
 
     local players = (FRAMEWORK == 'QB') and QBCore.Functions.GetQBPlayers() or ESX.GetPlayers()
@@ -250,23 +245,22 @@ AddEventHandler('yoda-cemeteryrob:createTargetEvidenceServer', function(ped, loc
         end
 
         if playerData and playerData.name == Config.PoliceJob then
-            TriggerClientEvent('yoda-cemeteryrob:createTargetEvidenceClient', playerData.source, ped, loc, assailantName)
+            TriggerClientEvent('sf_cemetery:createTargetEvidenceClient', playerData.source, ped, loc, assailantName)
         end
     end
 end)
 
-RegisterNetEvent('yoda-cemeteryrob:checkPoliceTarget')
-AddEventHandler('yoda-cemeteryrob:checkPoliceTarget', function(graves)
-    print('police event')
+RegisterNetEvent('sf_cemetery:checkPoliceTarget')
+AddEventHandler('sf_cemetery:checkPoliceTarget', function(graves)
     local count = 0
     local jobName = Config.PoliceJob
-    
+
     if FRAMEWORK == "ESX" then
         local policePlayers = ESX.GetExtendedPlayers('job', jobName)
         if type(policePlayers) == 'table' then
             count = #policePlayers
         else
-            print("Erro: ESX.GetExtendedPlayers não retornou uma tabela válida.")
+            print("[sf_cemetery] Error: ESX.GetExtendedPlayers did not return a valid table")
         end
     else
         local players = QBCore.Functions.GetPlayers()
@@ -278,29 +272,28 @@ AddEventHandler('yoda-cemeteryrob:checkPoliceTarget', function(graves)
                 end
             end
         else
-            print("Erro: QBCore.Functions.GetPlayers não retornou uma tabela válida.")
+            print("[sf_cemetery] Error: QBCore.Functions.GetPlayers did not return a valid table")
         end
     end
 
     if type(count) ~= 'number' then
         count = 0
     end
-    print(count)
-    TriggerClientEvent('yoda-cemeteryrob:startRob', source, count, graves)
+
+    TriggerClientEvent('sf_cemetery:startRob', source, count, graves)
 end)
 
-RegisterNetEvent('yoda-cemeteryrob:checkPoliceServer')
-AddEventHandler('yoda-cemeteryrob:checkPoliceServer', function()
-    print('police event')
+RegisterNetEvent('sf_cemetery:checkPoliceServer')
+AddEventHandler('sf_cemetery:checkPoliceServer', function()
     local count = 0
     local jobName = Config.PoliceJob
-    
+
     if FRAMEWORK == "ESX" then
         local policePlayers = ESX.GetExtendedPlayers('job', jobName)
         if type(policePlayers) == 'table' then
             count = #policePlayers
         else
-            print("Erro: ESX.GetExtendedPlayers não retornou uma tabela válida.")
+            print("[sf_cemetery] Error: ESX.GetExtendedPlayers did not return a valid table")
         end
     else
         local players = QBCore.Functions.GetPlayers()
@@ -312,15 +305,14 @@ AddEventHandler('yoda-cemeteryrob:checkPoliceServer', function()
                 end
             end
         else
-            print("Erro: QBCore.Functions.GetPlayers não retornou uma tabela válida.")
+            print("[sf_cemetery] Error: QBCore.Functions.GetPlayers did not return a valid table")
         end
     end
 
     if type(count) ~= 'number' or count == nil then
-        print("Aviso: count era nil ou não numérico, definindo como 0")
+        print("[sf_cemetery] Warning: count was nil or non-numeric, defaulting to 0")
         count = 0
     end
 
-    print("Total de policiais disponíveis:", count)
-    TriggerClientEvent('yoda-cemeteryrob:startRob', source, count, Graves)
+    TriggerClientEvent('sf_cemetery:startRob', source, count, Graves)
 end)
